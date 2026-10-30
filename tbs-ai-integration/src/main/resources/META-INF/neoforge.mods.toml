@@ -4,10 +4,11 @@ license="MIT"
 
 [[mods]]
 modId="tbsai"
-version="1.0.0"
+version="1.0"
 displayName="TBS: AI Integration"
-authors="TBS AI Integration Team"
-description="AI chat integration for The Broken Script 2.0.5."
+logoFile = "icon.png"
+authors="HorrorLover123"
+description="AI chat integration for The Broken Script 2.0.5"
 
 [[dependencies.tbsai]]
     modId="neoforge"

@@ -54,4 +54,3 @@ cp ../thebrokenscript.jar run/mods/ && ./gradlew runClient
 
 - **Search Scope:** Scope `grep` and file search tools to `tbs-ai-integration/src/` to avoid scanning build/run artifacts.
 - **Large Files:** When inspecting `TbsAiConfigScreen.java` (~430 lines), use `grep` or `offset`/`limit` rather than loading the whole file.
-- **No Mandatory Post-Task Docs:** Do not generate or maintain phantom index/status files (`anatomy.json`, `STATUS.md`, etc.) unless explicitly instructed by the user.
