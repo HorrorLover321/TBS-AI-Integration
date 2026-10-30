@@ -22,7 +22,7 @@ Run from `tbs-ai-integration/`:
 ./gradlew test --tests "net.tbsai.TbsAiTests.testCatalogHasExact90Events"
 
 # Verify built JAR bundles no forbidden classes (must return empty)
-jar tf build/libs/tbs-ai-integration-1.0.0.jar | grep -E "(net/thebrokenscript|net/minecraft|kotlin)"
+jar tf build/libs/tbs-ai-integration-1.0.jar | grep -E "(net/thebrokenscript|net/minecraft|kotlin)"
 
 # Launch dev client with TBS mod
 cp ../thebrokenscript.jar run/mods/ && ./gradlew runClient
