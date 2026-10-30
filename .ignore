@@ -1,0 +1,28 @@
+# Gradle build artifacts and caches
+.gradle/
+build/
+tbs-ai-integration/.gradle/
+tbs-ai-integration/build/
+
+# Minecraft run directory artifacts, logs, mods, saves
+run/
+tbs-ai-integration/run/
+
+# Large binary dependencies (>100MB exceeds GitHub limits)
+thebrokenscript.jar
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+!tbs-ai-integration/gradle/wrapper/gradle-wrapper.jar
+!tbs-ai-integration/libs/brokencore.jar
+
+# Logs
+*.log
+logs/
+
+# IDE and OS files
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.swp
+*~

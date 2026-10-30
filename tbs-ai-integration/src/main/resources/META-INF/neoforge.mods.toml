@@ -1,0 +1,31 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="tbsai"
+version="1.0.0"
+displayName="TBS: AI Integration"
+authors="TBS AI Integration Team"
+description="AI chat integration for The Broken Script 2.0.5."
+
+[[dependencies.tbsai]]
+    modId="neoforge"
+    type="required"
+    versionRange="[21.1.249,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.tbsai]]
+    modId="minecraft"
+    type="required"
+    versionRange="[1.21.1,1.22)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.tbsai]]
+    modId="thebrokenscript"
+    type="required"
+    versionRange="[2.0.5,)"
+    ordering="AFTER"
+    side="BOTH"

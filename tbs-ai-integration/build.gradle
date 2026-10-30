@@ -1,0 +1,55 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.148'
+}
+
+group = 'net.tbsai'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+neoForge {
+    version = '21.1.265'
+
+    mods {
+        tbsai {
+            sourceSet(sourceSets.main)
+        }
+    }
+
+    runs {
+        client {
+            client()
+        }
+        server {
+            server()
+        }
+    }
+
+    addModdingDependenciesTo(sourceSets.test)
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly files('../thebrokenscript.jar')
+    compileOnly files('libs/brokencore.jar')
+    compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
