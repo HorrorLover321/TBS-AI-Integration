@@ -4,7 +4,7 @@ license="MIT"
 
 [[mods]]
 modId="tbsai"
-version="1.0"
+version="1.1"
 displayName="TBS: AI Integration"
 logoFile = "icon.png"
 authors="HorrorLover123"
