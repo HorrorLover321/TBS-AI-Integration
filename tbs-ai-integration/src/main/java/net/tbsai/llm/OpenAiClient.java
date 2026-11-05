@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public class OpenAiClient implements LlmClient {
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
     private final HttpClient httpClient;
     private final String apiKey;
     private final String baseUrl;
@@ -130,7 +131,7 @@ public class OpenAiClient implements LlmClient {
         String url = baseUrl + "/models";
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(15))
+                .timeout(REQUEST_TIMEOUT)
                 .GET();
 
         if (!apiKey.isEmpty()) {
@@ -168,7 +169,7 @@ public class OpenAiClient implements LlmClient {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(15))
+                .timeout(REQUEST_TIMEOUT)
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
 
         if (!apiKey.isEmpty()) {

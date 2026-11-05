@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 
 public class GeminiClient implements LlmClient {
     private static final String BASE_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta";
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
     private final HttpClient httpClient;
     private final String apiKey;
     private final String model;
@@ -139,7 +140,7 @@ public class GeminiClient implements LlmClient {
         String url = BASE_ENDPOINT + "/models?key=" + URLEncoder.encode(apiKey, StandardCharsets.UTF_8) + "&pageSize=1000";
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(15))
+                .timeout(REQUEST_TIMEOUT)
                 .GET()
                 .build();
 
@@ -190,7 +191,7 @@ public class GeminiClient implements LlmClient {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(15))
+                .timeout(REQUEST_TIMEOUT)
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
 
