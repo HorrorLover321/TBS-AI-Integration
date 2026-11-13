@@ -2,6 +2,7 @@ package net.tbsai;
 
 import net.minecraft.nbt.CompoundTag;
 import net.tbsai.config.TbsAiConfig;
+import net.tbsai.event.ChatHandler;
 import net.tbsai.llm.LlmResponse;
 import net.tbsai.llm.OpenAiClient;
 import net.tbsai.llm.PromptBuilder;
@@ -114,5 +115,37 @@ public class TbsAiTests {
         assertTrue(prompt.contains("Previous summary text"));
         assertTrue(prompt.contains("Where are you?"));
         assertTrue(prompt.contains("Behind you."));
+    }
+
+    @Test
+    void testComputeRemainingTicks() {
+        // Fast LLM response: LLM took 1000ms, target delay was 3500ms -> remaining 2500ms -> 50 ticks
+        assertEquals(50, ChatHandler.computeRemainingTicks(1000L, 3500L, 2000L));
+
+        // Exact match: LLM took exactly target delay -> remaining 0ms -> 0 ticks
+        assertEquals(0, ChatHandler.computeRemainingTicks(1000L, 2500L, 3500L));
+
+        // Slow LLM response: LLM took 6000ms, target delay was 3000ms -> remaining -3000ms -> 0 ticks
+        assertEquals(0, ChatHandler.computeRemainingTicks(1000L, 3000L, 7000L));
+
+        // Ceiling rounding checks (20 ticks per second, 50ms per tick)
+        // 1ms remaining -> rounds up to 1 tick
+        assertEquals(1, ChatHandler.computeRemainingTicks(0L, 2000L, 1999L));
+        // 50ms remaining -> exactly 1 tick
+        assertEquals(1, ChatHandler.computeRemainingTicks(0L, 2000L, 1950L));
+        // 51ms remaining -> rounds up to 2 ticks
+        assertEquals(2, ChatHandler.computeRemainingTicks(0L, 2000L, 1949L));
+        // 100ms remaining -> exactly 2 ticks
+        assertEquals(2, ChatHandler.computeRemainingTicks(0L, 2000L, 1900L));
+
+        // Full 5000ms delay with 0ms elapsed -> 100 ticks
+        assertEquals(100, ChatHandler.computeRemainingTicks(0L, 5000L, 0L));
+    }
+
+    @Test
+    void testPendingMessageRecord() {
+        ChatHandler.PendingMessage pending = new ChatHandler.PendingMessage("hello null", 123456789L);
+        assertEquals("hello null", pending.text());
+        assertEquals(123456789L, pending.sentAtMs());
     }
 }

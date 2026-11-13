@@ -29,8 +29,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class ChatHandler {
+    public record PendingMessage(String text, long sentAtMs) {}
+
     private static final Set<UUID> IN_FLIGHT_PLAYERS = ConcurrentHashMap.newKeySet();
-    private static final Map<UUID, String> PENDING_MESSAGES = new ConcurrentHashMap<>();
+    private static final Map<UUID, PendingMessage> PENDING_MESSAGES = new ConcurrentHashMap<>();
     private static final Random RANDOM = new Random();
 
     private static final List<String> SCRIPTED_FALLBACKS = List.of(
@@ -64,6 +66,7 @@ public final class ChatHandler {
         MinecraftServer server = player.server;
         UUID uuid = player.getUUID();
         long gameTime = player.serverLevel().getGameTime();
+        long sentAtMs = System.currentTimeMillis();
 
         // Always store player message in memory
         TbsAiMemoryData memoryData = TbsAiMemoryData.get(server, uuid);
@@ -89,7 +92,7 @@ public final class ChatHandler {
 
         // Check in-flight requests limit (at most 1 per player)
         if (IN_FLIGHT_PLAYERS.contains(uuid)) {
-            PENDING_MESSAGES.put(uuid, rawText);
+            PENDING_MESSAGES.put(uuid, new PendingMessage(rawText, sentAtMs));
             if (TbsAiConfig.DEBUG_LOGGING.get()) {
                 TbsAiMod.LOGGER.debug("Request in-flight for {}. Queued pending message.", player.getName().getString());
             }
@@ -97,13 +100,14 @@ public final class ChatHandler {
         }
 
         IN_FLIGHT_PLAYERS.add(uuid);
-        processChatRequest(player, rawText);
+        processChatRequest(player, rawText, sentAtMs);
     }
 
-    private static void processChatRequest(ServerPlayer player, String message) {
+    private static void processChatRequest(ServerPlayer player, String message, long sentAtMs) {
         MinecraftServer server = player.server;
         UUID uuid = player.getUUID();
         TbsAiMemoryData memoryData = TbsAiMemoryData.get(server, uuid);
+        int delayMs = 2000 + RANDOM.nextInt(3001);
 
         String userPrompt = PromptBuilder.buildUserPrompt(player.serverLevel(), player, message, memoryData);
         String systemPrompt = net.tbsai.tbs.NullLore.getSystemPrompt();
@@ -115,22 +119,24 @@ public final class ChatHandler {
                             if (throwable != null) {
                                 handleFailure(player, throwable);
                             } else {
-                                handleSuccess(player, response, memoryData);
+                                long nowMs = System.currentTimeMillis();
+                                int baseTicks = computeRemainingTicks(sentAtMs, delayMs, nowMs);
+                                handleSuccess(player, response, memoryData, baseTicks);
                             }
                         } finally {
                             IN_FLIGHT_PLAYERS.remove(uuid);
                             // Process latest queued pending message if any
-                            String nextMsg = PENDING_MESSAGES.remove(uuid);
+                            PendingMessage nextMsg = PENDING_MESSAGES.remove(uuid);
                             if (nextMsg != null && isPlayerActive(player)) {
                                 IN_FLIGHT_PLAYERS.add(uuid);
-                                processChatRequest(player, nextMsg);
+                                processChatRequest(player, nextMsg.text(), nextMsg.sentAtMs());
                             }
                         }
                     });
                 });
     }
 
-    private static void handleSuccess(ServerPlayer player, net.tbsai.llm.LlmResponse response, TbsAiMemoryData memoryData) {
+    private static void handleSuccess(ServerPlayer player, net.tbsai.llm.LlmResponse response, TbsAiMemoryData memoryData, int baseTicks) {
         if (!isPlayerActive(player)) {
             return;
         }
@@ -159,7 +165,7 @@ public final class ChatHandler {
             if (lineIndex >= 5) {
                 break;
             }
-            int delayTicks = lineIndex * 24;
+            int delayTicks = baseTicks + lineIndex * 24;
             final String textToSend = line;
             TickHandler.schedule(player.getUUID(), delayTicks, () -> {
                 if (isPlayerActive(player)) {
@@ -173,7 +179,7 @@ public final class ChatHandler {
         // Schedule event 20 ticks after the last line
         if (eventId != null && TbsEventsManager.isValidEventId(eventId)) {
             int lastLineDelay = (lineIndex - 1) * 24;
-            int eventDelay = lastLineDelay + 20;
+            int eventDelay = baseTicks + lastLineDelay + 20;
 
             TickHandler.schedule(player.getUUID(), eventDelay, () -> {
                 if (!isPlayerActive(player)) {
@@ -221,6 +227,15 @@ public final class ChatHandler {
 
     private static boolean isPlayerActive(ServerPlayer player) {
         return player != null && player.isAlive() && player.connection != null && !player.hasDisconnected();
+    }
+
+    public static int computeRemainingTicks(long sentAtMs, long delayMs, long nowMs) {
+        long elapsed = nowMs - sentAtMs;
+        long remainingMs = delayMs - elapsed;
+        if (remainingMs <= 0) {
+            return 0;
+        }
+        return (int) ((remainingMs + 49) / 50);
     }
 
     @SubscribeEvent
