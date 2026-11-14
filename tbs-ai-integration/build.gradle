@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'net.tbsai'
-version = '1.2'
+version = '1.3'
 
 java {
     toolchain {
@@ -48,6 +48,34 @@ dependencies {
 
 tasks.named('test', Test) {
     useJUnitPlatform()
+}
+
+// Guardrail: the mod JAR must never bundle TBS/Minecraft/Kotlin classes (they are compileOnly)
+tasks.register('verifyJarContents') {
+    group = 'verification'
+    description = 'Fails if the mod JAR bundles forbidden classes (net/thebrokenscript, net/minecraft, kotlin).'
+    dependsOn tasks.jar
+    def jarProvider = tasks.jar.archiveFile
+    doLast {
+        def jarFile = jarProvider.get().asFile
+        def forbidden = ~/net\/thebrokenscript|net\/minecraft|kotlin/
+        def offenders = []
+        new java.util.zip.ZipFile(jarFile).withCloseable { zip ->
+            zip.entries().each { entry ->
+                if (entry.name =~ forbidden) {
+                    offenders << entry.name
+                }
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException("Forbidden entries bundled in ${jarFile.name}:\n  " + offenders.join('\n  '))
+        }
+        logger.lifecycle("verifyJarContents: ${jarFile.name} contains no forbidden classes")
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.verifyJarContents
 }
 
 tasks.withType(JavaCompile).configureEach {

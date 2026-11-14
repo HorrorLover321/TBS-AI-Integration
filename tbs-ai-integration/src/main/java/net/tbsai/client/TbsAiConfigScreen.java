@@ -18,10 +18,8 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import net.tbsai.config.ProviderType;
 import net.tbsai.config.TbsAiConfig;
-import net.tbsai.llm.GeminiClient;
 import net.tbsai.llm.LlmClient;
 import net.tbsai.llm.LlmManager;
-import net.tbsai.llm.OpenAiClient;
 import net.tbsai.memory.TbsAiMemoryData;
 
 import java.util.ArrayList;
@@ -35,10 +33,22 @@ public class TbsAiConfigScreen extends Screen {
     private static List<String> cachedGeminiModels = new ArrayList<>();
     private static List<String> cachedOpenAiModels = new ArrayList<>();
 
-    // Working values
+    // Working values; kept across screen re-initialisation (e.g. returning from child screens)
     private ProviderType selectedProvider;
     private boolean showApiKey = false;
     private String systemPromptOverride;
+    private String apiKeyValue;
+    private String baseUrlValue;
+    private String modelValue;
+    private String temperatureValue;
+    private String maxTokensValue;
+    private boolean eventsEnabledValue;
+    private String eventChanceValue;
+    private String cooldownValue;
+    private String maxPerHourValue;
+    private boolean respectNativeValue;
+    private boolean memoryEnabledValue;
+    private String summaryEveryValue;
 
     // Widgets
     private ConfigList list;
@@ -47,8 +57,6 @@ public class TbsAiConfigScreen extends Screen {
     private Button toggleKeyButton;
     private EditBox baseUrlBox;
     private EditBox modelBox;
-    private Button scanButton;
-    private Button cycleModelButton;
     private EditBox tempBox;
     private EditBox maxTokensBox;
 
@@ -69,6 +77,18 @@ public class TbsAiConfigScreen extends Screen {
         this.parent = parent;
         this.selectedProvider = TbsAiConfig.PROVIDER.get();
         this.systemPromptOverride = TbsAiConfig.SYSTEM_PROMPT_OVERRIDE.get();
+        this.apiKeyValue = TbsAiConfig.API_KEY.get();
+        this.baseUrlValue = TbsAiConfig.BASE_URL.get();
+        this.modelValue = TbsAiConfig.MODEL.get();
+        this.temperatureValue = String.valueOf(TbsAiConfig.TEMPERATURE.get());
+        this.maxTokensValue = String.valueOf(TbsAiConfig.MAX_TOKENS.get());
+        this.eventsEnabledValue = TbsAiConfig.EVENTS_ENABLED.get();
+        this.eventChanceValue = String.valueOf(TbsAiConfig.EVENT_CHANCE.get());
+        this.cooldownValue = String.valueOf(TbsAiConfig.EVENT_COOLDOWN_MINUTES.get());
+        this.maxPerHourValue = String.valueOf(TbsAiConfig.MAX_EVENTS_PER_HOUR.get());
+        this.respectNativeValue = TbsAiConfig.RESPECT_NATIVE_RESPONSES.get();
+        this.memoryEnabledValue = TbsAiConfig.MEMORY_ENABLED.get();
+        this.summaryEveryValue = String.valueOf(TbsAiConfig.SUMMARY_EVERY.get());
     }
 
     @Override
@@ -97,7 +117,7 @@ public class TbsAiConfigScreen extends Screen {
         // 2. API Key row
         apiKeyBox = new EditBox(font, left + 140, 0, 195, 20, Component.translatable("tbsai.config.api_key"));
         apiKeyBox.setMaxLength(512);
-        apiKeyBox.setValue(TbsAiConfig.API_KEY.get());
+        apiKeyBox.setValue(apiKeyValue);
         updateApiKeyFormatter();
 
         toggleKeyButton = Button.builder(Component.literal("Show"), b -> {
@@ -110,62 +130,61 @@ public class TbsAiConfigScreen extends Screen {
         // 3. Base URL row
         baseUrlBox = new EditBox(font, left + 140, 0, 260, 20, Component.translatable("tbsai.config.base_url"));
         baseUrlBox.setMaxLength(512);
-        baseUrlBox.setValue(TbsAiConfig.BASE_URL.get());
+        baseUrlBox.setValue(baseUrlValue);
         list.addRow(Component.translatable("tbsai.config.base_url"), List.of(baseUrlBox));
 
         // 4. Model row
         modelBox = new EditBox(font, left + 140, 0, 150, 20, Component.translatable("tbsai.config.model"));
         modelBox.setMaxLength(128);
-        modelBox.setValue(TbsAiConfig.MODEL.get());
+        modelBox.setValue(modelValue);
 
-        scanButton = Button.builder(Component.translatable("tbsai.config.scan"), b -> scanModelsAsync())
-                .bounds(left + 295, 0, 60, 20).build();
-
-        cycleModelButton = Button.builder(Component.literal("▼"), b -> cycleScannedModel())
-                .bounds(left + 360, 0, 40, 20).build();
-        list.addRow(Component.translatable("tbsai.config.model"), List.of(modelBox, scanButton, cycleModelButton));
+        Button selectModelButton = Button.builder(Component.translatable("tbsai.config.model_select"), b -> {
+            captureWorkingValues();
+            this.minecraft.setScreen(new ModelSelectScreen(this));
+        }).bounds(left + 295, 0, 120, 20).build();
+        list.addRow(Component.translatable("tbsai.config.model"), List.of(modelBox, selectModelButton));
 
         // 5. Sampling row: Temperature & Max Tokens
         tempBox = new EditBox(font, left + 140, 0, 70, 20, Component.literal("0.9"));
-        tempBox.setValue(String.valueOf(TbsAiConfig.TEMPERATURE.get()));
+        tempBox.setValue(temperatureValue);
 
         maxTokensBox = new EditBox(font, left + 330, 0, 70, 20, Component.literal("300"));
-        maxTokensBox.setValue(String.valueOf(TbsAiConfig.MAX_TOKENS.get()));
+        maxTokensBox.setValue(maxTokensValue);
         list.addRow(Component.translatable("tbsai.config.sampling"), List.of(tempBox, maxTokensBox));
 
         // 6. Events row: Enabled & Chance
         eventsEnabledCheckbox = Checkbox.builder(Component.translatable("tbsai.config.events_enabled"), font)
-                .selected(TbsAiConfig.EVENTS_ENABLED.get())
+                .selected(eventsEnabledValue)
                 .pos(left + 140, 0)
                 .build();
 
         eventChanceBox = new EditBox(font, left + 340, 0, 60, 20, Component.literal("25"));
-        eventChanceBox.setValue(String.valueOf(TbsAiConfig.EVENT_CHANCE.get()));
+        eventChanceBox.setValue(eventChanceValue);
         list.addRow(Component.translatable("tbsai.config.events"), List.of(eventsEnabledCheckbox, eventChanceBox));
 
         // 7. Event Limits: Cooldown & Max/Hour
         cooldownBox = new EditBox(font, left + 140, 0, 70, 20, Component.literal("4"));
-        cooldownBox.setValue(String.valueOf(TbsAiConfig.EVENT_COOLDOWN_MINUTES.get()));
+        cooldownBox.setValue(cooldownValue);
 
         maxPerHourBox = new EditBox(font, left + 330, 0, 70, 20, Component.literal("20"));
-        maxPerHourBox.setValue(String.valueOf(TbsAiConfig.MAX_EVENTS_PER_HOUR.get()));
+        maxPerHourBox.setValue(maxPerHourValue);
         list.addRow(Component.translatable("tbsai.config.event_limits"), List.of(cooldownBox, maxPerHourBox));
 
         // 8. Native Responses & Memory toggles
         respectNativeCheckbox = Checkbox.builder(Component.translatable("tbsai.config.respect_native"), font)
-                .selected(TbsAiConfig.RESPECT_NATIVE_RESPONSES.get())
+                .selected(respectNativeValue)
                 .pos(left + 140, 0)
                 .build();
 
         memoryEnabledCheckbox = Checkbox.builder(Component.translatable("tbsai.config.memory_enabled"), font)
-                .selected(TbsAiConfig.MEMORY_ENABLED.get())
+                .selected(memoryEnabledValue)
                 .pos(left + 290, 0)
                 .build();
         list.addRow(Component.translatable("tbsai.config.toggles"), List.of(respectNativeCheckbox, memoryEnabledCheckbox));
 
         // 9. Summary frequency & Reset Memory
         summaryEveryBox = new EditBox(font, left + 140, 0, 70, 20, Component.literal("50"));
-        summaryEveryBox.setValue(String.valueOf(TbsAiConfig.SUMMARY_EVERY.get()));
+        summaryEveryBox.setValue(summaryEveryValue);
 
         Button resetMemButton = Button.builder(Component.translatable("tbsai.config.reset_memory"), b -> resetMemoryAction())
                 .bounds(left + 260, 0, 140, 20).build();
@@ -173,6 +192,7 @@ public class TbsAiConfigScreen extends Screen {
 
         // 10. System prompt edit & Test Connection
         Button editPromptButton = Button.builder(Component.translatable("tbsai.config.edit_prompt"), b -> {
+            captureWorkingValues();
             this.minecraft.setScreen(new SystemPromptEditScreen(this, systemPromptOverride, savedPrompt -> {
                 this.systemPromptOverride = savedPrompt;
             }));
@@ -210,52 +230,67 @@ public class TbsAiConfigScreen extends Screen {
         baseUrlBox.setTextColor(isOpenAi ? 0xE0E0E0 : 0x707070);
     }
 
-    private void scanModelsAsync() {
-        scanButton.active = false;
-        statusMessage = "Scanning models...";
-        statusColor = 0xFFFF55;
-
-        String key = apiKeyBox.getValue().trim();
-        String base = baseUrlBox.getValue().trim();
-
-        LlmClient scanner = (selectedProvider == ProviderType.GEMINI)
-                ? new GeminiClient(key, modelBox.getValue(), 0.9, 300)
-                : new OpenAiClient(key, base, modelBox.getValue(), 0.9, 300);
-
-        scanner.scanModels().whenComplete((models, err) -> {
-            Minecraft.getInstance().execute(() -> {
-                scanButton.active = true;
-                if (err != null) {
-                    statusMessage = "Scan error: " + TbsAiConfig.sanitize(err.getMessage());
-                    statusColor = 0xFF5555;
-                } else {
-                    if (selectedProvider == ProviderType.GEMINI) {
-                        cachedGeminiModels = new ArrayList<>(models);
-                    } else {
-                        cachedOpenAiModels = new ArrayList<>(models);
-                    }
-                    statusMessage = "Scanned " + models.size() + " models successfully!";
-                    statusColor = 0x55FF55;
-                    if (!models.isEmpty() && (modelBox.getValue().isBlank() || !models.contains(modelBox.getValue()))) {
-                        modelBox.setValue(models.get(0));
-                    }
-                }
-            });
-        });
+    // Session cache accessors shared with ModelSelectScreen
+    static List<String> getSessionModels(ProviderType provider) {
+        return provider == ProviderType.GEMINI ? cachedGeminiModels : cachedOpenAiModels;
     }
 
-    private void cycleScannedModel() {
-        List<String> list = (selectedProvider == ProviderType.GEMINI) ? cachedGeminiModels : cachedOpenAiModels;
-        if (list.isEmpty()) {
-            statusMessage = "No scanned models in cache. Press Scan first.";
-            statusColor = 0xFFAA00;
+    static void updateSessionModels(ProviderType provider, List<String> models) {
+        if (provider == ProviderType.GEMINI) {
+            cachedGeminiModels = new ArrayList<>(models);
+        } else {
+            cachedOpenAiModels = new ArrayList<>(models);
+        }
+    }
+
+    ProviderType getSelectedProvider() {
+        return selectedProvider;
+    }
+
+    String getApiKeyInput() {
+        return apiKeyBox.getValue().trim();
+    }
+
+    String getBaseUrlInput() {
+        return baseUrlBox.getValue().trim();
+    }
+
+    String getModelInput() {
+        return modelBox.getValue().trim();
+    }
+
+    void onModelPicked(String model) {
+        modelValue = model;
+        modelBox.setValue(model);
+        statusMessage = Component.translatable("tbsai.config.model_select.selected", model).getString();
+        statusColor = 0x55FF55;
+    }
+
+    void applyScannedDefaultModel(List<String> models) {
+        // Fill the first scanned model only when the field is empty; manual input is never overwritten
+        if (!models.isEmpty() && modelBox.getValue().isBlank() && modelValue.isBlank()) {
+            modelValue = models.get(0);
+            modelBox.setValue(modelValue);
+        }
+    }
+
+    // Copy current widget values into working fields so they survive returning from child screens
+    private void captureWorkingValues() {
+        if (apiKeyBox == null) {
             return;
         }
-
-        String current = modelBox.getValue().trim();
-        int idx = list.indexOf(current);
-        int next = (idx + 1) % list.size();
-        modelBox.setValue(list.get(next));
+        apiKeyValue = apiKeyBox.getValue();
+        baseUrlValue = baseUrlBox.getValue();
+        modelValue = modelBox.getValue();
+        temperatureValue = tempBox.getValue();
+        maxTokensValue = maxTokensBox.getValue();
+        eventsEnabledValue = eventsEnabledCheckbox.selected();
+        eventChanceValue = eventChanceBox.getValue();
+        cooldownValue = cooldownBox.getValue();
+        maxPerHourValue = maxPerHourBox.getValue();
+        respectNativeValue = respectNativeCheckbox.selected();
+        memoryEnabledValue = memoryEnabledCheckbox.selected();
+        summaryEveryValue = summaryEveryBox.getValue();
     }
 
     private void testConnectionAsync() {
@@ -313,48 +348,50 @@ public class TbsAiConfigScreen extends Screen {
     }
 
     private void saveAndClose() {
+        captureWorkingValues();
+
         TbsAiConfig.PROVIDER.set(selectedProvider);
-        TbsAiConfig.API_KEY.set(apiKeyBox.getValue().trim());
-        TbsAiConfig.BASE_URL.set(baseUrlBox.getValue().trim());
-        TbsAiConfig.MODEL.set(modelBox.getValue().trim());
+        TbsAiConfig.API_KEY.set(apiKeyValue.trim());
+        TbsAiConfig.BASE_URL.set(baseUrlValue.trim());
+        TbsAiConfig.MODEL.set(modelValue.trim());
 
         try {
-            double temp = Double.parseDouble(tempBox.getValue().trim());
+            double temp = Double.parseDouble(temperatureValue.trim());
             TbsAiConfig.TEMPERATURE.set(Math.max(0.0, Math.min(1.5, temp)));
         } catch (Exception ignored) {
         }
 
         try {
-            int tokens = Integer.parseInt(maxTokensBox.getValue().trim());
+            int tokens = Integer.parseInt(maxTokensValue.trim());
             TbsAiConfig.MAX_TOKENS.set(Math.max(64, Math.min(1024, tokens)));
         } catch (Exception ignored) {
         }
 
-        TbsAiConfig.EVENTS_ENABLED.set(eventsEnabledCheckbox.selected());
+        TbsAiConfig.EVENTS_ENABLED.set(eventsEnabledValue);
 
         try {
-            int chance = Integer.parseInt(eventChanceBox.getValue().trim());
+            int chance = Integer.parseInt(eventChanceValue.trim());
             TbsAiConfig.EVENT_CHANCE.set(Math.max(0, Math.min(100, chance)));
         } catch (Exception ignored) {
         }
 
         try {
-            int cd = Integer.parseInt(cooldownBox.getValue().trim());
+            int cd = Integer.parseInt(cooldownValue.trim());
             TbsAiConfig.EVENT_COOLDOWN_MINUTES.set(Math.max(0, cd));
         } catch (Exception ignored) {
         }
 
         try {
-            int maxHour = Integer.parseInt(maxPerHourBox.getValue().trim());
+            int maxHour = Integer.parseInt(maxPerHourValue.trim());
             TbsAiConfig.MAX_EVENTS_PER_HOUR.set(Math.max(1, maxHour));
         } catch (Exception ignored) {
         }
 
-        TbsAiConfig.RESPECT_NATIVE_RESPONSES.set(respectNativeCheckbox.selected());
-        TbsAiConfig.MEMORY_ENABLED.set(memoryEnabledCheckbox.selected());
+        TbsAiConfig.RESPECT_NATIVE_RESPONSES.set(respectNativeValue);
+        TbsAiConfig.MEMORY_ENABLED.set(memoryEnabledValue);
 
         try {
-            int summary = Integer.parseInt(summaryEveryBox.getValue().trim());
+            int summary = Integer.parseInt(summaryEveryValue.trim());
             TbsAiConfig.SUMMARY_EVERY.set(Math.max(5, summary));
         } catch (Exception ignored) {
         }
