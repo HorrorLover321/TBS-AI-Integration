@@ -15,6 +15,9 @@ thebrokenscript.jar
 !tbs-ai-integration/gradle/wrapper/gradle-wrapper.jar
 !tbs-ai-integration/libs/brokencore.jar
 
+# Local secrets
+temp-API-keys.txt
+
 # Logs
 *.log
 logs/
